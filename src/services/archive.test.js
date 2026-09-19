@@ -104,3 +104,68 @@ test('buildQuery lowercases search words so AND/OR are not read as operators', (
   const query = archiveService.buildQuery({ searchQuery: 'AND OR', collection: 'SciFi_Horror' });
   assert.ok(query.includes('title:(and AND or)'), query);
 });
+
+test('buildQuery searches every app collection, but browses only the selected one', () => {
+  const search = archiveService.buildQuery({ searchQuery: 'casablanca', collection: 'SciFi_Horror' });
+  assert.ok(search.startsWith('collection:(feature_films OR '), search);
+  assert.ok(search.includes(' OR Film_Noir OR ') && !search.includes('collection:"SciFi_Horror"'), search);
+
+  assert.equal(archiveService.buildQuery({ collection: 'SciFi_Horror' }), 'collection:"SciFi_Horror"');
+});
+
+function mockDocs(docs) {
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ response: { docs, numFound: docs.length } }) });
+}
+
+test('fetchFiltered treats a trailing year as the same title', async () => {
+  const realFetch = globalThis.fetch;
+  mockDocs([
+    { identifier: 'a', title: 'House on Haunted Hill' },
+    { identifier: 'b', title: 'House on Haunted Hill (1959)' },
+    { identifier: 'c', title: 'HOUSE ON HAUNTED HILL [1959]' },
+    { identifier: 'd', title: '1984' },
+    { identifier: 'e', title: '2001' }
+  ]);
+  try {
+    const result = await archiveService.fetchFiltered({});
+    assert.deepEqual(result.movies.map(m => m.identifier), ['a', 'd', 'e']);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('fetchFiltered lists title matches before subject-only matches when searching by popularity', async () => {
+  const realFetch = globalThis.fetch;
+  mockDocs([
+    { identifier: 'musicals', title: 'Old Time Musicals Part 8', subject: 'casablanca' },
+    { identifier: 'film', title: 'Casablanca (1942)' },
+    { identifier: 'eye', title: 'The Hypnotic Eye', subject: 'casablanca' },
+    { identifier: 'bdrip', title: 'Casablanca. 720p' }
+  ]);
+  try {
+    const ranked = await archiveService.fetchFiltered({ searchQuery: 'Casablanca', sortBy: 'downloads' });
+    assert.deepEqual(ranked.movies.map(m => m.identifier), ['film', 'bdrip', 'musicals', 'eye']);
+
+    const byDate = await archiveService.fetchFiltered({ searchQuery: 'Casablanca', sortBy: 'date' });
+    assert.deepEqual(byDate.movies.map(m => m.identifier), ['musicals', 'film', 'eye', 'bdrip']);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('parseRuntime handles the odd separators Archive.org uploaders use', () => {
+  const minutes = (runtime) => Math.round(archiveService.parseRuntime(runtime));
+  assert.equal(minutes('1:33.13'), 93);
+  assert.equal(minutes("01:10'31"), 71);
+  assert.equal(minutes('00.59.56'), 60);
+  assert.equal(minutes('00:52:20.10'), 52);
+  assert.equal(minutes('1h 25m'), 85);
+  assert.equal(minutes('2h'), 120);
+  assert.equal(minutes('28 min 32 sec'), 29);
+  assert.equal(minutes('10,26’'), 10);
+  assert.equal(minutes('89 min.'), 89);
+  assert.equal(minutes('73 Minutes'), 73);
+  assert.equal(minutes('71'), 71);
+  assert.equal(minutes('0:00'), 0);
+  assert.equal(minutes('unknown'), 0);
+});
