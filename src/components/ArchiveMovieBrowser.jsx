@@ -98,8 +98,10 @@ export default function ArchiveMovieBrowser() {
         genre: genreFilter !== 'all' ? genreFilter : null,
         collection: category,
         seenTitles: seen,
+        // Many Archive.org items have no runtime recorded; a search keeps them rather than hiding the film
         filter: (m) =>
-          (contentType === 'trailers' ? m.runtimeMinutes <= 30 : m.runtimeMinutes >= minRuntime) &&
+          ((activeSearch && m.runtimeMinutes === 0) ||
+            (contentType === 'trailers' ? m.runtimeMinutes <= 30 : m.runtimeMinutes >= minRuntime)) &&
           (genreFilter === 'all' || m.genres.includes(genreFilter))
       });
       if (requestId !== latestRequest.current) return;
@@ -141,6 +143,9 @@ export default function ArchiveMovieBrowser() {
   // Handle category change
   const handleCategoryChange = (newCategory) => {
     setCategory(newCategory);
+    // Searches span all collections, so picking one means going back to browsing it
+    setSearchQuery('');
+    setActiveSearch('');
     setMoviesWithoutImages(new Set());
     setGenreFilter('all'); // Reset genre filter when changing category
   };
@@ -290,7 +295,11 @@ export default function ArchiveMovieBrowser() {
                   type="text"
                   placeholder="Search movies..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    // Emptying the box ends the search
+                    if (e.target.value === '') setActiveSearch('');
+                  }}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   className="flex-1 pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-l-lg focus:outline-none focus:border-yellow-400 min-w-0"
                 />
@@ -437,6 +446,7 @@ export default function ArchiveMovieBrowser() {
             Showing <strong className="text-white">{displayedMovies.length}</strong>
             {' '}{contentType === 'trailers' ? 'shorts' : 'movies'}
             {genreFilter !== 'all' && ` in ${genreFilter}`}
+            {activeSearch && ` for "${activeSearch}" across all collections`}
           </span>
           {contentType !== 'trailers' && (
             <>

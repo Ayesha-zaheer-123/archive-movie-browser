@@ -124,25 +124,22 @@ const GENRE_ALIASES = {
 };
 
 class ArchiveService {
-  // Parse runtime from various formats
+  // Parse runtime (in minutes) from the many formats uploaders use:
+  // "1:17:26", "20:33", "89 min.", "1h 25m", "01:10'31", "1:33.13", "28 min 32 sec"
   parseRuntime(runtime) {
     if (!runtime) return 0;
     const runtimeStr = String(runtime);
+    const nums = (runtimeStr.match(/\d+/g) || []).map(Number);
+    if (nums.length === 0) return 0;
 
-    // Handle HH:MM:SS or MM:SS format
-    if (runtimeStr.includes(':')) {
-      const parts = runtimeStr.split(':').map(Number);
-      if (parts.length === 3) {
-        return parts[0] * 60 + parts[1] + parts[2] / 60;
-      } else if (parts.length === 2) {
-        // Archive.org two-part runtimes are MM:SS (e.g. "20:33", "51:56")
-        return parts[0] + parts[1] / 60;
-      }
+    // "1h 25m", "2h"
+    if (/\d\s*h/i.test(runtimeStr)) {
+      return nums[0] * 60 + (nums[1] || 0);
     }
-
-    // Handle "90 min", "90 minutes", etc.
-    const numMatch = runtimeStr.match(/(\d+)/);
-    return numMatch ? parseInt(numMatch[1], 10) : 0;
+    // Three or more numbers are H:M:S whatever the separators; two are M:S; one is minutes
+    if (nums.length >= 3) return nums[0] * 60 + nums[1] + nums[2] / 60;
+    if (nums.length === 2) return nums[0] + nums[1] / 60;
+    return nums[0];
   }
 
   // Normalize genre to standard categories
@@ -197,6 +194,12 @@ class ArchiveService {
     return Array.from(genres).sort();
   }
 
+  // Split user input into plain lowercase words (null if there are none).
+  // Lowercased so typed "AND"/"OR" are plain words, not operators.
+  searchWords(searchQuery) {
+    return String(searchQuery || '').toLowerCase().match(/[\p{L}\p{N}]+/gu);
+  }
+
   // Build search query
   buildQuery(options = {}) {
     const {
@@ -213,9 +216,10 @@ class ArchiveService {
 
     // Match every search word (a phrase match finds nothing for "night living").
     // Only letters and digits survive - Archive.org's backend errors on escaped quotes.
-    // Lowercased so typed "AND"/"OR" are plain words, not operators.
-    const words = searchQuery.toLowerCase().match(/[\p{L}\p{N}]+/gu);
+    const words = this.searchWords(searchQuery);
     if (words) {
+      // A search looks in every collection the app offers, not just the selected one
+      query = `collection:(${VIDEO_CATEGORIES.map(c => c.id).join(' OR ')})`;
       // Search in title, subject, and creator
       const all = `(${words.join(' AND ')})`;
       query += ` AND (title:${all} OR subject:${all} OR creator:${all})`;
@@ -338,27 +342,34 @@ class ArchiveService {
     } = options;
 
     const movies = [];
-    let page = startPage;
+    let nextPage = startPage;
     let total = 0;
 
-    while (movies.length < count && page < startPage + maxPages) {
+    while (movies.length < count && nextPage !== null && nextPage < startPage + maxPages) {
+      const page = nextPage;
       const result = await this.fetchMovies({ ...fetchOptions, page, rowsPerPage });
       total = result.total;
 
       for (const movie of result.movies) {
-        const titleKey = String(movie.title).toLowerCase().trim();
+        // "Title", "Title (1959)" and "Title [1959]" are the same film
+        const lowerTitle = String(movie.title).toLowerCase().trim();
+        const titleKey = lowerTitle.replace(/\s*[([]\d{4}[)\]]$/, '') || lowerTitle;
         if (seenTitles.has(titleKey) || !filter(movie)) continue;
         seenTitles.add(titleKey);
         movies.push(movie);
       }
 
-      if (page * rowsPerPage >= total) {
-        return { movies, total, nextPage: null };
-      }
-      page++;
+      nextPage = page * rowsPerPage >= total ? null : page + 1;
     }
 
-    return { movies, total, nextPage: page };
+    // Popularity order ranks subject-only matches above the film itself, so list title matches first
+    const words = this.searchWords(fetchOptions.searchQuery);
+    if (words && (fetchOptions.sortBy ?? 'downloads') === 'downloads') {
+      const inTitle = (m) => words.every(w => String(m.title).toLowerCase().includes(w));
+      movies.sort((a, b) => inTitle(b) - inTitle(a));
+    }
+
+    return { movies, total, nextPage };
   }
 
   // Get detailed metadata for a single item
