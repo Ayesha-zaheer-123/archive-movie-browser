@@ -330,7 +330,8 @@ class ArchiveService {
           archiveUrl: `https://archive.org/details/${movie.identifier}`,
           thumbnailUrl: `https://archive.org/services/img/${movie.identifier}`,
           embedUrl: `https://archive.org/embed/${movie.identifier}`,
-          date: movie.date || movie.publicdate
+          date: movie.date || movie.publicdate,
+          publicDate: movie.publicdate
         };
       });
 
@@ -373,7 +374,11 @@ class ArchiveService {
         // The same film is uploaded many times. Same title counts as a duplicate
         // unless both copies state a year and the years differ (The Bat 1926 vs 1959).
         const key = this.dedupeKey(movie.title);
-        const year = String(movie.title).match(FILM_YEAR)?.[0] ?? movie.year;
+        // A year in the title is the film's. A metadata year equal to the upload year is
+        // usually the uploader's default, not the film's, so it can't tell two films apart.
+        const uploadYear = Number(String(movie.publicDate || '').slice(0, 4));
+        const year = String(movie.title).match(FILM_YEAR)?.[0] ??
+          (movie.year !== uploadYear ? movie.year : null);
         const duplicate = year
           ? seenTitles.has(`${key}|${year}`) || seenTitles.has(`${key}|?`)
           : seenTitles.has(key);

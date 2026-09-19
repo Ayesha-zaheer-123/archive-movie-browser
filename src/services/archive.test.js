@@ -218,3 +218,19 @@ test('fetchFiltered keeps different films that share a title', async () => {
     globalThis.fetch = realFetch;
   }
 });
+
+test('fetchFiltered ignores a metadata year that is just the upload year', async () => {
+  const realFetch = globalThis.fetch;
+  mockDocs([
+    { identifier: 'film', title: 'House on Haunted Hill', year: '1959', publicdate: '2008-03-01T00:00:00Z' },
+    { identifier: 'reupload', title: 'The House on Haunted Hill', year: '2020', publicdate: '2020-10-31T00:00:00Z' },
+    { identifier: 'file', title: 'house_on_haunted_hill_512kb', year: '2025', publicdate: '2025-01-05T00:00:00Z' },
+    { identifier: 'remake', title: 'House on Haunted Hill (1999)', year: '2021', publicdate: '2021-06-01T00:00:00Z' }
+  ]);
+  try {
+    const result = await archiveService.fetchFiltered({});
+    assert.deepEqual(result.movies.map(m => m.identifier), ['film', 'remake']);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
