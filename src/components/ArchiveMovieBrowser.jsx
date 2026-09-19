@@ -9,8 +9,6 @@ import {
   Settings,
   Grid,
   List,
-  ChevronLeft,
-  ChevronRight,
   SlidersHorizontal,
   Library,
   Calendar
@@ -36,7 +34,7 @@ export default function ArchiveMovieBrowser() {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [totalResults, setTotalResults] = useState(0);
+  const [nextPage, setNextPage] = useState(null); // next Archive.org page to load, null when exhausted
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,9 +44,6 @@ export default function ArchiveMovieBrowser() {
   const [contentType, setContentType] = useState('features'); // 'features' or 'trailers'
   const [sortBy, setSortBy] = useState('downloads');
   const [category, setCategory] = useState('SciFi_Horror'); // Video collection/category
-  const [page, setPage] = useState(1);
-  const [rowsPerPage] = useState(50);
-  const [displayLimit, setDisplayLimit] = useState(24); // Show 24 movies at a time for smooth scrolling
 
   // Get current category info
   const currentCategory = VIDEO_CATEGORIES.find(c => c.id === category) || VIDEO_CATEGORIES[0];
@@ -61,8 +56,21 @@ export default function ArchiveMovieBrowser() {
   }, [tmdbApiKey]);
 
 
-  // Fetch movies - always replaces, never appends
-  const fetchMovies = useCallback(async (pageNum) => {
+  // Only the latest request may update state (older responses can arrive last)
+  const latestRequest = useRef(0);
+
+  // Titles already shown, so the same film isn't repeated across batches
+  const seenTitles = useRef(new Set());
+
+  // Fetch a batch of movies. startPage 1 replaces the list, later pages append.
+  const fetchMovies = useCallback(async (startPage = 1) => {
+    const requestId = ++latestRequest.current;
+    const append = startPage > 1;
+    if (!append) {
+      seenTitles.current = new Set();
+      setMovies([]);
+    }
+    const seen = seenTitles.current;
     setLoading(true);
     setError(null);
 
@@ -81,77 +89,60 @@ export default function ArchiveMovieBrowser() {
         sortOrder = direction;
       }
 
-      const result = await archiveService.fetchMovies({
+      // Filters run inside the service so every batch comes back full
+      const result = await archiveService.fetchFiltered({
         searchQuery: activeSearch,
         sortBy: apiSortBy,
         sortOrder,
-        page: pageNum,
-        rowsPerPage,
+        startPage,
         genre: genreFilter !== 'all' ? genreFilter : null,
-        collection: category
+        collection: category,
+        seenTitles: seen,
+        filter: (m) =>
+          (contentType === 'trailers' ? m.runtimeMinutes <= 30 : m.runtimeMinutes >= minRuntime) &&
+          (genreFilter === 'all' || m.genres.includes(genreFilter))
       });
+      if (requestId !== latestRequest.current) return;
 
-      // Deduplicate movies by title (same movie uploaded multiple times)
-      const seen = new Set();
-      const uniqueMovies = result.movies.filter(m => {
-        // Create a normalized key from title (lowercase, trimmed)
-        const titleKey = (m.title || '').toLowerCase().trim();
-        if (seen.has(titleKey)) return false;
-        seen.add(titleKey);
-        return true;
-      });
-      setMovies(uniqueMovies);
-      setTotalResults(result.total);
+      setMovies(prev => (append ? [...prev, ...result.movies] : result.movies));
+      setNextPage(result.nextPage);
     } catch (err) {
+      if (requestId !== latestRequest.current) return;
       setError(err.message);
-      setMovies([]);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) setLoading(false);
     }
-  }, [activeSearch, sortBy, rowsPerPage, genreFilter, category]);
+  }, [activeSearch, sortBy, genreFilter, category, contentType, minRuntime]);
 
-  // Fetch when page or filters change
+  // Fetch from the start whenever filters change
   useEffect(() => {
-    fetchMovies(page);
-  }, [fetchMovies, page]);
+    fetchMovies(1);
+  }, [fetchMovies]);
 
   // Handle search submit
   const handleSearch = () => {
     setActiveSearch(searchQuery);
     setGenreFilter('all');
-    setPage(1);
-    setDisplayLimit(24);
     setMoviesWithoutImages(new Set());
   };
 
   // Handle genre filter change
   const handleGenreChange = (genre) => {
     setGenreFilter(genre);
-    setPage(1);
-    setDisplayLimit(24);
     setMoviesWithoutImages(new Set());
   };
 
   // Handle sort change
   const handleSortChange = (newSort) => {
     setSortBy(newSort);
-    setPage(1);
-    setDisplayLimit(24);
     setMoviesWithoutImages(new Set());
   };
 
   // Handle category change
   const handleCategoryChange = (newCategory) => {
     setCategory(newCategory);
-    setPage(1);
-    setDisplayLimit(24);
     setMoviesWithoutImages(new Set());
     setGenreFilter('all'); // Reset genre filter when changing category
-  };
-
-  // Show more movies within current page
-  const handleShowMore = () => {
-    setDisplayLimit(prev => prev + 24);
   };
 
   // Track movies that failed to load images (no poster available)
@@ -172,20 +163,9 @@ export default function ArchiveMovieBrowser() {
     }
   }, []);
 
-  // Filter movies by runtime and content type
+  // Runtime and genre filtering already happened in fetchMovies
   const filteredByRuntime = useMemo(() => {
-    if (!movies || !Array.isArray(movies)) {
-      return [];
-    }
-
-    let filtered;
-    if (contentType === 'trailers') {
-      // Trailers/shorts: under 30 minutes or no runtime data (likely short content)
-      filtered = movies.filter(m => m && (m.runtimeMinutes === 0 || m.runtimeMinutes <= 30));
-    } else {
-      // Full movies: filter by minimum runtime (must have runtime data)
-      filtered = movies.filter(m => m && m.runtimeMinutes >= minRuntime);
-    }
+    let filtered = movies;
 
     // If no active search, filter out movies known to not have TMDB posters
     if (!activeSearch && tmdbApiKey) {
@@ -202,7 +182,7 @@ export default function ArchiveMovieBrowser() {
     }
 
     return filtered;
-  }, [movies, minRuntime, contentType, activeSearch, moviesWithoutImages, tmdbApiKey]);
+  }, [movies, activeSearch, moviesWithoutImages, tmdbApiKey]);
 
   // Get genres from filtered movies
   const availableGenres = useMemo(() => {
@@ -227,9 +207,7 @@ export default function ArchiveMovieBrowser() {
       return [];
     }
 
-    let filtered = genreFilter === 'all'
-      ? filteredByRuntime
-      : filteredByRuntime.filter(m => m && m.genres && m.genres.includes(genreFilter));
+    let filtered = filteredByRuntime;
 
     // Client-side sort by TMDB rating
     if (sortBy === 'tmdb_rating') {
@@ -241,17 +219,7 @@ export default function ArchiveMovieBrowser() {
     }
 
     return filtered;
-  }, [filteredByRuntime, genreFilter, sortBy, tmdbRatings]);
-
-  // Visible movies (limited for performance)
-  const visibleMovies = useMemo(() => {
-    return displayedMovies.slice(0, displayLimit);
-  }, [displayedMovies, displayLimit]);
-
-  const hasMoreToShow = displayedMovies.length > displayLimit;
-
-  // Pagination
-  const totalPages = Math.ceil(totalResults / rowsPerPage);
+  }, [filteredByRuntime, sortBy, tmdbRatings]);
 
 
   return (
@@ -421,7 +389,7 @@ export default function ArchiveMovieBrowser() {
                   <option value="date asc">Release Date (Oldest)</option>
                   <option value="publicdate desc">Recently Added</option>
                   <option value="publicdate asc">Oldest Added</option>
-                  <option value="title">Title A-Z</option>
+                  <option value="title asc">Title A-Z</option>
                 </select>
               </div>
             </div>
@@ -447,7 +415,7 @@ export default function ArchiveMovieBrowser() {
               >
                 All Genres
               </button>
-              {STANDARD_GENRES.slice(0, 12).map((genre) => (
+              {STANDARD_GENRES.map((genre) => (
                 <button
                   key={genre}
                   onClick={() => handleGenreChange(genre)}
@@ -466,8 +434,7 @@ export default function ArchiveMovieBrowser() {
         {/* Stats bar */}
         <div className="flex flex-wrap items-center gap-4 mb-6 text-sm text-gray-400">
           <span>
-            Showing <strong className="text-white">{visibleMovies.length}</strong>
-            {displayedMovies.length > visibleMovies.length && ` of ${displayedMovies.length}`}
+            Showing <strong className="text-white">{displayedMovies.length}</strong>
             {' '}{contentType === 'trailers' ? 'shorts' : 'movies'}
             {genreFilter !== 'all' && ` in ${genreFilter}`}
           </span>
@@ -490,7 +457,7 @@ export default function ArchiveMovieBrowser() {
           <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 mb-6">
             <p className="text-red-300">Error: {error}</p>
             <button
-              onClick={fetchMovies}
+              onClick={() => fetchMovies(movies.length > 0 && nextPage ? nextPage : 1)}
               className="mt-2 text-sm text-red-400 hover:text-red-300 underline"
             >
               Try again
@@ -498,8 +465,8 @@ export default function ArchiveMovieBrowser() {
           </div>
         )}
 
-        {/* Loading state */}
-        {loading && (
+        {/* Loading state (first batch only - "Load more" keeps the grid visible) */}
+        {loading && movies.length === 0 && (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-yellow-400" />
             <span className="ml-3 text-lg">Loading movies from Archive.org...</span>
@@ -507,7 +474,7 @@ export default function ArchiveMovieBrowser() {
         )}
 
         {/* Movie grid/list */}
-        {!loading && visibleMovies.length > 0 && (
+        {displayedMovies.length > 0 && (
           <div
             className={
               viewMode === 'grid'
@@ -515,7 +482,7 @@ export default function ArchiveMovieBrowser() {
                 : 'space-y-3'
             }
           >
-            {visibleMovies.map((movie) => (
+            {displayedMovies.map((movie) => (
               <MovieCard
                 key={movie.identifier}
                 movie={movie}
@@ -530,7 +497,7 @@ export default function ArchiveMovieBrowser() {
         )}
 
         {/* Empty state */}
-        {!loading && visibleMovies.length === 0 && !error && (
+        {!loading && displayedMovies.length === 0 && !error && (
           <div className="text-center py-16 text-gray-400">
             <Film className="w-16 h-16 mx-auto mb-4 opacity-30" />
             <p className="text-lg">No movies found matching your criteria</p>
@@ -538,49 +505,17 @@ export default function ArchiveMovieBrowser() {
           </div>
         )}
 
-        {/* Pagination */}
-        {!loading && displayedMovies.length > 0 && (
-          <div className="flex flex-col items-center gap-4 mt-8 pt-8 border-t border-gray-800">
-            {/* Show More within current page */}
-            {hasMoreToShow && (
-              <button
-                onClick={handleShowMore}
-                className="flex items-center gap-2 px-6 py-3 bg-yellow-500 text-gray-900 font-medium rounded-lg hover:bg-yellow-400"
-              >
-                Show More ({displayedMovies.length - visibleMovies.length} remaining)
-              </button>
-            )}
-
-            {/* Page navigation */}
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => {
-                  setPage(p => Math.max(1, p - 1));
-                  setDisplayLimit(24);
-                }}
-                disabled={page === 1}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-800 rounded-lg disabled:opacity-50 hover:bg-gray-700 disabled:hover:bg-gray-800"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Previous
-              </button>
-
-              <span className="text-gray-400">
-                Page <strong className="text-white">{page}</strong> of {totalPages || '?'}
-              </span>
-
-              <button
-                onClick={() => {
-                  setPage(p => p + 1);
-                  setDisplayLimit(24);
-                }}
-                disabled={page >= totalPages}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-800 rounded-lg disabled:opacity-50 hover:bg-gray-700 disabled:hover:bg-gray-800"
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+        {/* Load more */}
+        {nextPage && !error && (displayedMovies.length > 0 || !loading) && (
+          <div className="flex justify-center mt-8 pt-8 border-t border-gray-800">
+            <button
+              onClick={() => fetchMovies(nextPage)}
+              disabled={loading}
+              className="flex items-center gap-2 px-6 py-3 bg-yellow-500 text-gray-900 font-medium rounded-lg hover:bg-yellow-400 disabled:opacity-50"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {loading ? 'Loading...' : 'Load more'}
+            </button>
           </div>
         )}
       </main>

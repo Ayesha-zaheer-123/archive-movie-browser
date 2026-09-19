@@ -88,11 +88,16 @@ export default function MovieDetailPage({ movie, onClose, allMovies = [], onPlay
   useEffect(() => {
     if (!movie) return;
 
+    let cancelled = false;
     setLoading(true);
     setIsPlaying(false);
+    // Clear the previous movie's data so it can't show under this one
+    setTmdbData(null);
+    setTmdbDetails(null);
 
     // Search for movie on TMDB
     tmdbService.searchMovie(movie.title, movie.year).then(async (data) => {
+      if (cancelled) return;
       setTmdbData(data);
 
       // If we found a match, fetch detailed info
@@ -103,14 +108,17 @@ export default function MovieDetailPage({ movie, onClose, allMovies = [], onPlay
           );
           if (detailsRes.ok) {
             const details = await detailsRes.json();
+            if (cancelled) return;
             setTmdbDetails(details);
           }
         } catch (err) {
           console.error('Failed to fetch TMDB details:', err);
         }
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     });
+
+    return () => { cancelled = true; };
   }, [movie]);
 
   // Find related movies from our collection based on genre
