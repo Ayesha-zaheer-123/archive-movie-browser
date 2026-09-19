@@ -135,11 +135,8 @@ class ArchiveService {
       if (parts.length === 3) {
         return parts[0] * 60 + parts[1] + parts[2] / 60;
       } else if (parts.length === 2) {
-        // Could be HH:MM or MM:SS - assume MM:SS if first part < 10
-        if (parts[0] < 10) {
-          return parts[0] + parts[1] / 60;
-        }
-        return parts[0] * 60 + parts[1];
+        // Archive.org two-part runtimes are MM:SS (e.g. "20:33", "51:56")
+        return parts[0] + parts[1] / 60;
       }
     }
 
@@ -214,14 +211,21 @@ class ArchiveService {
     // Adding mediatype filter is too restrictive for many collections
     let query = `collection:"${collection}"`;
 
-    if (searchQuery) {
+    // Match every search word (a phrase match finds nothing for "night living").
+    // Only letters and digits survive - Archive.org's backend errors on escaped quotes.
+    // Lowercased so typed "AND"/"OR" are plain words, not operators.
+    const words = searchQuery.toLowerCase().match(/[\p{L}\p{N}]+/gu);
+    if (words) {
       // Search in title, subject, and creator
-      query += ` AND (title:"${searchQuery}" OR subject:"${searchQuery}" OR creator:"${searchQuery}")`;
+      const all = `(${words.join(' AND ')})`;
+      query += ` AND (title:${all} OR subject:${all} OR creator:${all})`;
     }
 
     // Add genre filter to query for better results
     if (genre && genre !== 'all') {
-      query += ` AND subject:"${genre}"`;
+      // Include aliases so the server matches what normalizeGenre() maps to this genre
+      const names = [genre, ...Object.keys(GENRE_ALIASES).filter(alias => GENRE_ALIASES[alias] === genre)];
+      query += ` AND subject:(${names.map(n => `"${n}"`).join(' OR ')})`;
     }
 
     if (year) {
@@ -271,6 +275,11 @@ class ArchiveService {
 
     const data = await response.json();
 
+    // Archive.org reports query errors in the body with HTTP 200
+    if (data.error) {
+      throw new Error(`Archive.org API error: ${data.error}`);
+    }
+
     if (!data.response || !data.response.docs) {
       return { movies: [], total: 0 };
     }
@@ -312,6 +321,44 @@ class ArchiveService {
       total: data.response.numFound || 0,
       unfilteredCount: movies.length
     };
+  }
+
+  // Fetch server pages until `count` movies pass `filter`, so client-side
+  // filtering never produces empty or near-empty pages.
+  // Returns nextPage = null once Archive.org has no more results.
+  async fetchFiltered(options = {}) {
+    const {
+      count = 24,
+      startPage = 1,
+      maxPages = 5, // cap requests per batch; sparse collections just need more "load more" clicks
+      rowsPerPage = 50,
+      filter = () => true,
+      seenTitles = new Set(), // lowercased titles already shown (same film is often uploaded repeatedly)
+      ...fetchOptions
+    } = options;
+
+    const movies = [];
+    let page = startPage;
+    let total = 0;
+
+    while (movies.length < count && page < startPage + maxPages) {
+      const result = await this.fetchMovies({ ...fetchOptions, page, rowsPerPage });
+      total = result.total;
+
+      for (const movie of result.movies) {
+        const titleKey = String(movie.title).toLowerCase().trim();
+        if (seenTitles.has(titleKey) || !filter(movie)) continue;
+        seenTitles.add(titleKey);
+        movies.push(movie);
+      }
+
+      if (page * rowsPerPage >= total) {
+        return { movies, total, nextPage: null };
+      }
+      page++;
+    }
+
+    return { movies, total, nextPage: page };
   }
 
   // Get detailed metadata for a single item
