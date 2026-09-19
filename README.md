@@ -5,12 +5,18 @@ A modern, responsive web application for browsing and watching public domain mov
 <img width="1841" height="1294" alt="image" src="https://github.com/user-attachments/assets/cfe7ca9c-537c-4db3-9bb2-aebbffa3b083" />
 
 
+**Live demo:** https://archive-movie-browser.vercel.app
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Famponce%2Farchive-movie-browser)
+
+It runs without any configuration. For movie posters, add `VITE_TMDB_API_KEY` in your Vercel project's environment variables and redeploy.
+
 ## Features
 
 - **Browse Public Domain Films** - Access thousands of free, legal movies from Archive.org's collection
 - **High-Quality Posters** - Automatically matches movies with TMDB for professional movie posters
 - **Genre Filtering** - Filter by Horror, Sci-Fi, Comedy, Drama, and more
-- **Smart Search** - Search for specific titles across the entire Archive.org movie collection
+- **Smart Search** - Search titles, subjects, and creators across every collection in the app at once
 - **Embedded Player** - Watch movies directly in the browser without leaving the site
 - **Movie Details** - View cast, director, ratings, runtime, and plot synopsis
 - **Related Movies** - Discover similar films based on genre
@@ -30,9 +36,9 @@ A modern, responsive web application for browsing and watching public domain mov
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22+
 - npm or yarn
-- TMDB API key (free at [themoviedb.org](https://www.themoviedb.org/settings/api))
+- Optional: TMDB API key for movie posters (free at [themoviedb.org](https://www.themoviedb.org/settings/api))
 
 ### Installation
 
@@ -84,9 +90,10 @@ The built files will be in the `dist` directory.
 - Sort by popularity, rating, newest, or alphabetically
 
 ### Searching
-- Type a movie title in the search box and press Enter or click Search
-- Search results show all matching movies regardless of TMDB poster availability
-- Clear the search to return to browsing mode
+- Type a title, subject, or creator in the search box and press Enter or click Search
+- A search looks across every collection, not just the selected one, and matches all the words you type
+- Search results show all matching movies regardless of TMDB poster availability or missing runtime data
+- Empty the search box or pick a category to return to browsing mode
 
 ### Watching Movies
 - Click any movie card to open the detail page
@@ -99,7 +106,7 @@ The built files will be in the `dist` directory.
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `VITE_TMDB_API_KEY` | Your TMDB API key for movie posters | Yes |
+| `VITE_TMDB_API_KEY` | Your TMDB API key for movie posters | No (recommended) |
 
 ### Without TMDB API Key
 
@@ -133,6 +140,16 @@ archive-movie-browser/
 └── vite.config.js
 ```
 
+## Make It Yours
+
+Fork it and turn it into your own themed archive: only westerns, only Prelinger educational films, only silent comedies.
+
+- **Collections** - edit `VIDEO_CATEGORIES` in `src/services/archive.js`. Each `id` is an Archive.org collection identifier, the last part of a URL like `archive.org/details/Film_Noir`.
+- **Default collection** - change the initial `category` state in `src/components/ArchiveMovieBrowser.jsx`.
+- **Genres** - edit `STANDARD_GENRES` and `GENRE_ALIASES` in `src/services/archive.js`.
+
+All Archive.org access goes through `src/services/archive.js`, which has no React or DOM dependencies, so it can be reused outside this app.
+
 ## API Credits
 
 - **Internet Archive** - [archive.org](https://archive.org) - Public domain movie collection and streaming
@@ -142,11 +159,11 @@ archive-movie-browser/
 
 ## License
 
-MIT License - feel free to use this project for personal or commercial purposes.
+[MIT](LICENSE) - feel free to use this project for personal or commercial purposes.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please feel free to submit a Pull Request. Run `npm test` and `npm run build` before opening one.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
