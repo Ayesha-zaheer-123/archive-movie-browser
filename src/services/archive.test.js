@@ -88,13 +88,16 @@ test('fetchFiltered stops at the end of results and at the page cap', async () =
   }
 });
 
-test('fetchFiltered skips titles the caller has already seen', async () => {
+test('fetchFiltered skips films an earlier batch already returned', async () => {
   const realFetch = globalThis.fetch;
   mockArchive(5);
   try {
-    const seenTitles = new Set(['movie 1-0']);
-    const result = await archiveService.fetchFiltered({ count: 1, rowsPerPage: 4, seenTitles, filter: m => m.runtimeMinutes >= 40 });
-    assert.equal(result.movies[0].title, 'Movie 2-0');
+    const seenTitles = new Set();
+    const options = { count: 1, rowsPerPage: 4, seenTitles, filter: m => m.runtimeMinutes >= 40 };
+    const first = await archiveService.fetchFiltered(options);
+    const again = await archiveService.fetchFiltered(options);
+    assert.equal(first.movies[0].title, 'Movie 1-0');
+    assert.equal(again.movies[0].title, 'Movie 2-0');
   } finally {
     globalThis.fetch = realFetch;
   }
@@ -140,14 +143,14 @@ test('fetchFiltered lists title matches before subject-only matches when searchi
     { identifier: 'musicals', title: 'Old Time Musicals Part 8', subject: 'casablanca' },
     { identifier: 'film', title: 'Casablanca (1942)' },
     { identifier: 'eye', title: 'The Hypnotic Eye', subject: 'casablanca' },
-    { identifier: 'bdrip', title: 'Casablanca. 720p' }
+    { identifier: 'express', title: 'Casablanca Express' }
   ]);
   try {
     const ranked = await archiveService.fetchFiltered({ searchQuery: 'Casablanca', sortBy: 'downloads' });
-    assert.deepEqual(ranked.movies.map(m => m.identifier), ['film', 'bdrip', 'musicals', 'eye']);
+    assert.deepEqual(ranked.movies.map(m => m.identifier), ['film', 'express', 'musicals', 'eye']);
 
     const byDate = await archiveService.fetchFiltered({ searchQuery: 'Casablanca', sortBy: 'date' });
-    assert.deepEqual(byDate.movies.map(m => m.identifier), ['musicals', 'film', 'eye', 'bdrip']);
+    assert.deepEqual(byDate.movies.map(m => m.identifier), ['musicals', 'film', 'eye', 'express']);
   } finally {
     globalThis.fetch = realFetch;
   }
@@ -168,4 +171,50 @@ test('parseRuntime handles the odd separators Archive.org uploaders use', () => 
   assert.equal(minutes('71'), 71);
   assert.equal(minutes('0:00'), 0);
   assert.equal(minutes('unknown'), 0);
+});
+
+test('fetchFiltered treats re-uploads with quality tags as the same film', async () => {
+  const realFetch = globalThis.fetch;
+  mockDocs([
+    { identifier: 'keep-film', title: 'House on Haunted Hill', year: '1959' },
+    { identifier: 'dupe-the', title: 'The House On Haunted Hill', year: '1959' },
+    { identifier: 'dupe-hd', title: 'House On Haunted Hill-hd' },
+    { identifier: 'dupe-720', title: 'House On Haunted Hill 720p' },
+    { identifier: 'dupe-bluray', title: 'House on Haunted Hill (1959) [P&M] 1080p Blu-Ray (6.6GB)', year: '1959' },
+    { identifier: 'dupe-fullhd', title: 'House on Haunted Hill (1959, Full HD)', year: '1959' },
+    { identifier: 'dupe-color', title: 'House On Haunted Hill (1959) [Colorized, 4K, 60FPS]' },
+    { identifier: 'dupe-the2', title: 'House On The Haunted Hill (1959, Horror, Vincent Price, Colorized)', year: '1959' },
+    { identifier: 'dupe-year', title: 'House On Haunted Hill 1959', year: '1959' },
+    { identifier: 'dupe-wide', title: 'HOUSE ON HAUNTED HILL widescreen & video quality upgrade' },
+    { identifier: 'dupe-file', title: 'house_on_haunted_hill_512kb' },
+    { identifier: 'dupe-full', title: 'House On Haunted Hill Full Movie' },
+    { identifier: 'keep-trailer', title: 'House on Haunted Hill [1959] - Trailer', year: '1959' },
+    { identifier: 'keep-hosted', title: 'Beware Theater presents House On Haunted Hill' },
+    { identifier: 'keep-sequel', title: 'Return To House On Haunted Hill' },
+    { identifier: 'keep-article', title: 'Phantom Ship , The', year: '1936' },
+    { identifier: 'dupe-article', title: 'The Phantom Ship', year: '1936' }
+  ]);
+  try {
+    const result = await archiveService.fetchFiltered({});
+    assert.deepEqual(result.movies.map(m => m.identifier),
+      ['keep-film', 'keep-trailer', 'keep-hosted', 'keep-sequel', 'keep-article']);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('fetchFiltered keeps different films that share a title', async () => {
+  const realFetch = globalThis.fetch;
+  mockDocs([
+    { identifier: 'bat-1926', title: 'The Bat', year: '1926' },
+    { identifier: 'bat-1959', title: 'The Bat (1959)' },
+    { identifier: 'bat-1959-again', title: 'The Bat', year: '1959' },
+    { identifier: 'bat-unknown', title: 'The Bat' }
+  ]);
+  try {
+    const result = await archiveService.fetchFiltered({});
+    assert.deepEqual(result.movies.map(m => m.identifier), ['bat-1926', 'bat-1959']);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

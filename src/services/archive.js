@@ -123,7 +123,26 @@ const GENRE_ALIASES = {
   'sports drama': 'Sport'
 };
 
+// Words that tell re-uploads of one film apart, not different films
+const UPLOAD_NOISE = /\b(\d{3,4}p|4k|\d+fps|\d+kb|full hd|hd|uhd|blu ?ray|bdrip|brrip|dvdrip|dvd|mpeg\d?|mp4|avi|mkv|full movie|widescreen|colou?rized|restored|remastered|video quality|quality|upgrade|uncut)\b/g;
+const FILM_YEAR = /\b(18|19|20)\d{2}\b/g;
+
 class ArchiveService {
+  // Key that is equal for re-uploads of one film:
+  // "Title", "The Title-hd", "title_512kb", "Title (1959) [1080p Blu-Ray]"
+  dedupeKey(title) {
+    const lower = String(title).toLowerCase();
+    const key = lower
+      .replace(/[([][^)\]]*[)\]]/g, ' ') // bracketed notes
+      .replace(/[^\p{L}\p{N}]+/gu, ' ') // punctuation and underscores
+      .replace(UPLOAD_NOISE, ' ')
+      .replace(FILM_YEAR, ' ')
+      .replace(/\b(the|a|an)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return key || lower.trim(); // titles like "1984" are nothing but a year
+  }
+
   // Parse runtime (in minutes) from the many formats uploaders use:
   // "1:17:26", "20:33", "89 min.", "1h 25m", "01:10'31", "1:33.13", "28 min 32 sec"
   parseRuntime(runtime) {
@@ -337,7 +356,7 @@ class ArchiveService {
       maxPages = 5, // cap requests per batch; sparse collections just need more "load more" clicks
       rowsPerPage = 50,
       filter = () => true,
-      seenTitles = new Set(), // lowercased titles already shown (same film is often uploaded repeatedly)
+      seenTitles = new Set(), // films already shown; pass the same Set back in to dedupe across batches
       ...fetchOptions
     } = options;
 
@@ -351,11 +370,16 @@ class ArchiveService {
       total = result.total;
 
       for (const movie of result.movies) {
-        // "Title", "Title (1959)" and "Title [1959]" are the same film
-        const lowerTitle = String(movie.title).toLowerCase().trim();
-        const titleKey = lowerTitle.replace(/\s*[([]\d{4}[)\]]$/, '') || lowerTitle;
-        if (seenTitles.has(titleKey) || !filter(movie)) continue;
-        seenTitles.add(titleKey);
+        // The same film is uploaded many times. Same title counts as a duplicate
+        // unless both copies state a year and the years differ (The Bat 1926 vs 1959).
+        const key = this.dedupeKey(movie.title);
+        const year = String(movie.title).match(FILM_YEAR)?.[0] ?? movie.year;
+        const duplicate = year
+          ? seenTitles.has(`${key}|${year}`) || seenTitles.has(`${key}|?`)
+          : seenTitles.has(key);
+        if (duplicate || !filter(movie)) continue;
+        seenTitles.add(key);
+        seenTitles.add(`${key}|${year ?? '?'}`);
         movies.push(movie);
       }
 
