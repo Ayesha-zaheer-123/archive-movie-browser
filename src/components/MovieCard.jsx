@@ -1,5 +1,5 @@
 import React, { useState, useEffect, memo } from 'react';
-import { Clock, Download, Star, ExternalLink, Play, Image as ImageIcon } from 'lucide-react';
+import { Clock, Download, Star, ExternalLink, Play, Film, Image as ImageIcon } from 'lucide-react';
 import tmdbService from '../services/tmdb';
 import archiveService from '../services/archive';
 
@@ -82,15 +82,15 @@ const MovieCard = memo(function MovieCard({ movie, tmdbEnabled = false, viewMode
       >
         {/* Poster */}
         <div className="relative aspect-[2/3] bg-gray-700 overflow-hidden">
-          {!posterLoaded && (
+          {!tmdbChecked || (tmdbPosterUrl && !posterLoaded) ? (
             <div className="absolute inset-0 skeleton flex items-center justify-center">
               <ImageIcon className="w-8 h-8 text-gray-600" />
             </div>
-          )}
+          ) : null}
 
-          {posterUrl && !posterError ? (
+          {tmdbPosterUrl && !posterError ? (
             <img
-              src={posterUrl}
+              src={tmdbPosterUrl}
               alt={movie.title}
               className={`movie-poster w-full h-full object-cover transition-transform duration-300 ${
                 posterLoaded ? 'opacity-100' : 'opacity-0'
@@ -99,14 +99,26 @@ const MovieCard = memo(function MovieCard({ movie, tmdbEnabled = false, viewMode
               onError={handlePosterError}
               loading="lazy"
             />
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-700 p-4">
-              <ImageIcon className="w-12 h-12 text-gray-500 mb-2" />
-              <span className="text-xs text-gray-500 text-center line-clamp-2">
-                {movie.title}
-              </span>
+          ) : tmdbChecked ? (
+            // No real poster: Archive.org thumbnails are a random frame, often cropped
+            // opening credits, so use it only as a blurred backdrop behind the title
+            <div className="absolute inset-0 bg-gray-800">
+              <img
+                src={archiveThumbnailUrl}
+                alt=""
+                className="w-full h-full object-cover blur scale-110 opacity-80"
+                onError={(e) => { e.target.style.display = 'none'; }}
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent flex flex-col justify-end p-3">
+                <Film className="w-5 h-5 text-yellow-400 mb-2" />
+                <span className="text-base font-bold text-white leading-tight line-clamp-4">
+                  {movie.title}
+                </span>
+                {movie.year && <span className="text-xs text-gray-400 mt-1">{movie.year}</span>}
+              </div>
             </div>
-          )}
+          ) : null}
 
           {/* Hover overlay */}
           <div
