@@ -24,7 +24,7 @@ const pendingRequests = new Map();
 
 // Rate limiting
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 100; // ms between requests
+export const MIN_REQUEST_INTERVAL = 25; // ms between requests
 
 // Load cache from localStorage on init
 function loadCacheFromStorage() {
@@ -87,15 +87,16 @@ class TMDBService {
 
   async throttledFetch(url) {
     const now = Date.now();
-    const timeSinceLastRequest = now - lastRequestTime;
+    // Reserve the slot before yielding so a batch cannot share one timer.
+    const requestTime = Math.max(now, lastRequestTime + MIN_REQUEST_INTERVAL);
+    lastRequestTime = requestTime;
 
-    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+    if (requestTime > now) {
       await new Promise(resolve =>
-        setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest)
+        setTimeout(resolve, requestTime - now)
       );
     }
 
-    lastRequestTime = Date.now();
     return fetch(url);
   }
 
