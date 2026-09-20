@@ -2,6 +2,122 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import archiveService from './archive.js';
 
+test('getMovieByIdentifier normalizes Archive.org metadata', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      metadata: {
+        identifier: 'example-film',
+        title: ['Example Film'],
+        year: '1954',
+        runtime: '1:30:00',
+        subject: ['science fiction', 'Drama'],
+        downloads: 42,
+        description: 'A test movie.',
+        creator: ['Test Director'],
+        date: '1954-01-01'
+      }
+    })
+  });
+  try {
+    const movie = await archiveService.getMovieByIdentifier('example-film');
+    assert.deepEqual(movie, {
+      id: 'example-film', identifier: 'example-film', title: 'Example Film',
+      year: 1954, runtimeMinutes: 90, runtime: '1:30:00', genres: ['Drama', 'Sci-Fi'],
+      downloads: 42, rating: null, description: 'A test movie.', creator: 'Test Director',
+      archiveUrl: 'https://archive.org/details/example-film',
+      thumbnailUrl: 'https://archive.org/services/img/example-film',
+      embedUrl: 'https://archive.org/embed/example-film', date: '1954-01-01', publicDate: undefined
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('getMovieByIdentifier uses the identifier when metadata has no title', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ metadata: { identifier: 'untitled-item' } })
+  });
+  try {
+    const movie = await archiveService.getMovieByIdentifier('untitled-item');
+    assert.equal(movie.identifier, 'untitled-item');
+    assert.equal(movie.title, 'untitled-item');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('getMovieByIdentifier throws when metadata response is empty or missing metadata', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({}) });
+  try {
+    await assert.rejects(
+      () => archiveService.getMovieByIdentifier('missing-item'),
+      /Archive\.org item not found: missing-item/
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('getMovieByIdentifier throws when metadata has no identifier', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ metadata: {} }) });
+  try {
+    await assert.rejects(
+      () => archiveService.getMovieByIdentifier('no-identifier-item'),
+      /Archive\.org item not found: no-identifier-item/
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('getMovieByIdentifier rejects when item contains blocked identifier', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      metadata: {
+        identifier: 'thechild-item',
+        title: 'Some Film'
+      }
+    })
+  });
+  try {
+    await assert.rejects(
+      () => archiveService.getMovieByIdentifier('thechild-item'),
+      /Archive\.org item is blocked: thechild-item/
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('getMovieByIdentifier rejects when item contains blocked title', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      metadata: {
+        identifier: 'innocent-identifier',
+        title: 'The Child Film'
+      }
+    })
+  });
+  try {
+    await assert.rejects(
+      () => archiveService.getMovieByIdentifier('innocent-identifier'),
+      /Archive\.org item is blocked: innocent-identifier/
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
 test('parseRuntime reads two-part values as MM:SS', () => {
   assert.equal(Math.round(archiveService.parseRuntime('20:33')), 21);
   assert.equal(Math.round(archiveService.parseRuntime('51:56')), 52);
