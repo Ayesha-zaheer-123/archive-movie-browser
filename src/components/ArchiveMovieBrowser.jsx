@@ -304,6 +304,57 @@ export default function ArchiveMovieBrowser() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
+  // Genre row scroll: auto-scroll selected pill into view and track end-of-row
+  const genreRowRef = useRef(null);
+  const [genreRowAtEnd, setGenreRowAtEnd] = useState(false);
+
+  // Scroll the selected pill to the centre of the row. Only acts when the row
+  // is in scrollable/mobile mode (scrollWidth > clientWidth); on desktop the
+  // pills wrap so there is nothing to scroll.
+  const scrollSelectedPillIntoView = useCallback(() => {
+    const row = genreRowRef.current;
+    if (!row) return;
+    // Skip on desktop: pills wrap so the row is not scrollable
+    if (row.scrollWidth <= row.clientWidth) return;
+    const pressed = row.querySelector('[aria-pressed="true"]');
+    if (pressed) {
+      // Move the row itself: scrollIntoView would also scroll the page when the row is
+      // off screen (rotating the phone deep in the list jumped back to the top)
+      const pill = pressed.getBoundingClientRect();
+      const box = row.getBoundingClientRect();
+      row.scrollLeft += pill.left - box.left - (box.width - pill.width) / 2;
+    }
+  }, []);
+
+  // Re-scroll when the selected genre changes (covers initial load from URL
+  // and every manual pill click).
+  useEffect(() => {
+    scrollSelectedPillIntoView();
+  }, [genreFilter, scrollSelectedPillIntoView]);
+
+  // Re-scroll when the row is resized — this covers the desktop→mobile
+  // transition: the row switches from wrapped to scrollable, so the selected
+  // pill may suddenly be off-screen.
+  useEffect(() => {
+    const row = genreRowRef.current;
+    if (!row) return;
+    const observer = new ResizeObserver(scrollSelectedPillIntoView);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [scrollSelectedPillIntoView]);
+
+  // Hide the right-edge fade once the row has been scrolled to its end.
+  useEffect(() => {
+    const row = genreRowRef.current;
+    if (!row) return;
+    const update = () => {
+      setGenreRowAtEnd(row.scrollLeft + row.clientWidth >= row.scrollWidth - 1);
+    };
+    row.addEventListener('scroll', update, { passive: true });
+    update(); // run once on mount
+    return () => row.removeEventListener('scroll', update);
+  }, []);
+
   // Track TMDB ratings for client-side sorting
   const [tmdbRatings, setTmdbRatings] = useState({});
 
@@ -528,7 +579,7 @@ export default function ArchiveMovieBrowser() {
               <Filter className="w-4 h-4 text-gray-400" />
               <span className="text-sm text-gray-400">Filter by genre:</span>
             </div>
-            <div className="flex flex-nowrap md:flex-wrap gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 [mask-image:linear-gradient(to_right,black_94%,transparent)] md:[mask-image:none]">
+            <div ref={genreRowRef} className={`flex flex-nowrap md:flex-wrap gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 md:[mask-image:none] ${genreRowAtEnd ? '' : '[mask-image:linear-gradient(to_right,black_94%,transparent)]'}`}>
               <button
                 onClick={() => handleGenreChange('all')}
                 aria-pressed={genreFilter === 'all'}
