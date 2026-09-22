@@ -8,7 +8,7 @@ Live at **[orphanedfilms.com](https://www.orphanedfilms.com)**.
 
 | Tonight | Television |
 |---|---|
-| [![The front page: tonight's film, live channels, horror, lists](docs/screenshots/home.jpg)](https://www.orphanedfilms.com) | [![Television: the set, the channels, the guide](docs/screenshots/tv.jpg)](https://www.orphanedfilms.com/tv) |
+| [![The front page: tonight's film, what is on the channels, horror, lists](docs/screenshots/home.jpg)](https://www.orphanedfilms.com) | [![Television: the set, the channels, the guide](docs/screenshots/tv.jpg)](https://www.orphanedfilms.com/tv) |
 | One hand-picked cult film a day, what is on the channels, and rows with a reason. | Nine channels playing their lineups in order from a fixed moment, so the same film is on for everyone. Tune in mid-film. |
 
 | Browse | A film |

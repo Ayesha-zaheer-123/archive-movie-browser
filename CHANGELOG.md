@@ -8,7 +8,7 @@ The site becomes **Orphaned Films**. A new name, a front page, one design system
 
 ### Added
 
-- A front page at `/`: tonight's film, hand-picked from `src/programme/featured.json` and rotated daily; live channels; the most-watched horror; new uploads with posters; the lists as tiles with their own posters; one decade a day; a "wanted" count of films with no poster; "Continue watching" from the positions the player already keeps in your browser.
+- A front page at `/`: tonight's film, hand-picked from `src/programme/featured.json` and rotated daily; what is on the channels; the most-watched horror; new uploads with posters; the lists as tiles with their own posters; one decade a day; a "wanted" count of films with no poster; "Continue watching" from the positions the player already keeps in your browser.
 - **Television** at `/tv`. Every list is a channel that plays its lineup in order from a fixed moment, so the same film is on for everyone. Tune in mid-film, "From the start" to restart, ↑ ↓ to change channel, the next film starts on its own. A guide with a now-line. `public/tv-lineups.json` (built by `npm run tv`) holds each film's stream and length.
 - The schedule as feeds: `/api/tv` (JSON with the live offset), `/api/tv/playlist.m3u`, `/api/tv/guide.xml` (XMLTV).
 - Nine channels: 80s action, 80s horror, the stunts nobody would insure (Keaton), creature features, drive-in double features, Hitchcock before Hollywood and after, noir you can finish tonight, Saturday matinee westerns, silent but not quiet. All English-language, every film with a poster.

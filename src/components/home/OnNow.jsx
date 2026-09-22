@@ -11,7 +11,7 @@ export default function OnNow() {
   if (channels && channels.length === 0) return null;
 
   return (
-    <Section id="on-now" eyebrow="On now" title="Live channels" blurb="Every channel runs round the clock, the same for everyone. Tune in mid-film, like real television." more="Guide" href="/tv">
+    <Section id="on-now" eyebrow="Television" title="On now" blurb="Every channel runs round the clock, the same for everyone. Tune in mid-film, like real television." more="Guide" href="/tv">
       <ol className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x">
         {(channels || Array.from({ length: 6 }, (_, i) => ({ id: `c${i}` }))).map(channel => (
           <li key={channel.id} className="shrink-0 w-[260px] snap-start">
