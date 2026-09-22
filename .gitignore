@@ -21,3 +21,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 .vercel
+
+# Local tooling and editor state, never the repo
+.omc/
+.claude/
+*.swp
+*.swo
