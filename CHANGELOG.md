@@ -2,7 +2,7 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com), newest first.
 
-## [2.0.0] - Unreleased
+## [2.0.0] - 2026-09-22
 
 The site becomes **Orphaned Films**. A new name, a front page, one design system, and television. Announced in [discussion #188](https://github.com/amponce/archive-movie-browser/discussions/188).
 
