@@ -1,6 +1,6 @@
 {
   "name": "archive-movie-browser",
-  "version": "1.3.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test \"src/**/*.test.js\"",
-    "index": "node scripts/build-poster-index.mjs"
+    "index": "node scripts/build-poster-index.mjs",
+    "tv": "node scripts/build-tv-lineups.mjs",
+    "contributors": "node scripts/contributors.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.47.0",

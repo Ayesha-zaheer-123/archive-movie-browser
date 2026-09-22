@@ -13,6 +13,8 @@ import Stats from '../components/home/Stats';
 import FilmRow from '../components/home/FilmRow';
 import Lists from '../components/home/Lists';
 import Wanted from '../components/home/Wanted';
+import ContinueWatching from '../components/home/ContinueWatching';
+import OnNow from '../components/home/OnNow';
 
 // The front desk. Tonight's film, the numbers, and rows with a reason. Everything comes from
 // the poster index except two live rows (horror, newest), and those only show posters.
@@ -41,12 +43,14 @@ export default function HomePage() {
       <McpBanner />
       <SiteHeader current="/" />
       {featured && <Hero featured={featured} fileNumber={fileNumber} wall={wall} />}
+      <div className="pb-12 rule"><OnNow /></div>
       <Stats cells={[
         [counts.identified, 'films identified'],
         [counts.posters, 'with a poster on file'],
         [counts.wanted, 'still without a poster', true],
         [LISTS.length, 'curated lists'],
       ]} />
+      <ContinueWatching index={index} />
       <FilmRow id="horror" cards={horror} eyebrow="The house genre" title="Horror, mostly unclaimed" blurb="The most-watched horror in the collections. Nobody renewed the rights, so they're yours." more="All horror" href="/browse?genre=Horror" />
       <FilmRow id="surfaced" cards={newest} firstLabel="Newest" eyebrow="Just surfaced" title="New on the Archive" blurb="The latest feature-length uploads to archive.org. Come back tomorrow, there will be more." more="All newest" href="/browse?genre=all&sort=publicdate+desc&runtime=40" />
       <Lists lists={LISTS} index={index} />
