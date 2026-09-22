@@ -20,6 +20,10 @@ export function setPosterIndex(entries) {
   films = entries || {};
 }
 
+// The whole index, loaded once per page. Pages that read it directly (the front page, the reel)
+// share this so it is fetched once.
+export function loadPosterIndex() { return load(); }
+
 function load() {
   if (films) return Promise.resolve(films);
   loading = loading || fetch(`${import.meta.env?.BASE_URL || '/'}poster-index.json`)
@@ -41,7 +45,26 @@ export async function indexedMatch(identifier) {
 // Films the index has a poster for come first; each group keeps the order it arrived in. The
 // index answers from memory, so the batch is ordered before it is shown and no card moves later.
 // ponytail: films matched live by TMDB (not in the index) stay where they are; resolving those
-// first would hold every page back by a second or more.
+// first would hold every page back by a second or more. Goes away once the whole catalogue is
+// indexed and nothing is matched live.
+// One card per film: when the index says two uploads are the same film, keep the better copy
+// in the earlier one's place. `seen` carries the films already on screen across "Load more".
+export async function oneCopyPerFilm(movies, seen = new Set(), better = (a) => a) {
+  const matches = await Promise.all(movies.map(movie => indexedMatch(movie.identifier)));
+  const slot = new Map(); // film id -> position in `out`
+  const out = [];
+  movies.forEach((movie, i) => {
+    const id = matches[i]?.id;
+    if (!id) { out.push(movie); return; }
+    if (seen.has(id)) return;
+    if (slot.has(id)) { out[slot.get(id)] = better(out[slot.get(id)], movie); return; }
+    slot.set(id, out.length);
+    out.push(movie);
+  });
+  for (const id of slot.keys()) seen.add(id);
+  return out;
+}
+
 export async function postersFirst(movies) {
   const matches = await Promise.all(movies.map(movie => indexedMatch(movie.identifier)));
   return [...movies.filter((_, i) => matches[i]), ...movies.filter((_, i) => !matches[i])];
