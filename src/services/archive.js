@@ -341,7 +341,7 @@ class ArchiveService {
   // Split user input into plain lowercase words (null if there are none).
   // Lowercased so typed "AND"/"OR" are plain words, not operators.
   searchWords(searchQuery) {
-    return String(searchQuery || '').toLowerCase().match(/[\p{L}\p{N}]+/gu);
+    return String(searchQuery || '').toLowerCase().match(/[\p{L}\p{N}]+/gu)?.slice(0, 12);
   }
 
   // Build search query

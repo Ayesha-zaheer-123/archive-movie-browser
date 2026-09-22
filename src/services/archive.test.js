@@ -184,6 +184,23 @@ test('buildQuery matches all search words and drops query syntax characters', ()
   assert.ok(!/["\\]/.test(query.replace('collection:"SciFi_Horror"', '')), query);
 });
 
+test('buildQuery limits search to the first twelve words', () => {
+  const query = archiveService.buildQuery({
+    searchQuery:
+      'one two three four five six seven eight nine ten eleven twelve thirteen fourteen',
+    collection: 'SciFi_Horror'
+  });
+
+  assert.ok(
+    query.includes(
+      'title:(one AND two AND three AND four AND five AND six AND seven AND eight AND nine AND ten AND eleven AND twelve)'
+    ),
+    query
+  );
+  assert.ok(!query.includes('thirteen'), query);
+  assert.ok(!query.includes('fourteen'), query);
+});
+
 test('buildQuery ignores a search made only of punctuation', () => {
   assert.equal(archiveService.buildQuery({ searchQuery: '"" ()', collection: 'SciFi_Horror' }), 'collection:"SciFi_Horror" AND NOT mediatype:collection AND NOT collection:(movie_trailers_unsorted OR iicadom OR home_movies OR 35mmstockfootage OR stock_footage OR prelinger_mashups OR laserdiscs)');
 });

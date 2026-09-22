@@ -180,6 +180,7 @@ export default function SearchBox({ value, onChange, onSearch, onOpenFilm, onPic
         aria-controls={listId}
         aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
         autoComplete="off"
+        maxLength={200}
         placeholder="Search films, or paste an Archive.org link"
         value={value}
         onChange={(e) => {

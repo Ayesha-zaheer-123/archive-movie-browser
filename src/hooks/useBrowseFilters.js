@@ -58,8 +58,10 @@ export default function useBrowseFilters({ onOpenFilmLink, onReopenFilm } = {}) 
     if (link?.type === 'collection') return changeCategory(link.id);
     if (link?.type === 'search') text = link.query;
     if (text.trim()) track('Search', { query: text, kind: link ? 'pasted link' : 'typed' });
-    setSearchQuery(text);
-    setActiveSearch(text.trim());
+    const limitedText = text.slice(0, 200);
+
+    setSearchQuery(limitedText);
+    setActiveSearch(limitedText.trim());
     setGenre('all');
   };
   const typeSearch = (text) => { setSearchQuery(text); if (text === '') setActiveSearch(''); }; // emptying the box ends the search
